@@ -16,7 +16,7 @@
 	onMount(() => {
 
 		
-		const socket = io("https://fluorescent-profuse-acorn.glitch.me:3000/");
+		const socket = io("https://fluorescent-profuse-acorn.glitch.me");
 
 		const videoGrid = document.getElementById('video-grid');
 		const superVid = document.getElementById('super-video');
