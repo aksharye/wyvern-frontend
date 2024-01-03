@@ -3,7 +3,11 @@ const config = {
 	content: ['./src/**/*.{html,js,svelte,ts}'],
 
 	theme: {
-		extend: {}
+		extend: {
+			scale: {
+				'-100': '-1',
+			}
+		}
 	},
 
 	plugins: []
