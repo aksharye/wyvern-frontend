@@ -6,30 +6,35 @@
 	import { onMount } from 'svelte';
 	import { io } from 'socket.io-client'
 	import { v4 } from 'uuid';
+	import Box from './Box.svelte';
+	import '@fortawesome/fontawesome-free/css/all.min.css'
 	/** @type {import('./$types').LayoutData} */
 
 
 	export let data;
     let roomName = data.name;
 
-	const peers = {};
-	const videos = {};
+	let videos = new Map();
+	let peers = new Map();
+	let sharesIn = new Map();
+	let shareCallsOut = new Map();
+	let shareCallsIn = new Map();
 
-	const sharesIn = {};
-	const shareCallsOut = {};
-	const shareCallsIn = {};
-
-	var camera = false;
+	var camera = true;
 	var muted = false;
 	var screenshare = false;
 	var screenshareTracks = null;
 	var myShare = null;
+	var username = "";
+
+	let boxes = [];
 
 	onMount(() => {
 
-		
-		// const socket = io("https://fluorescent-profuse-acorn.glitch.me");
-		const socket = io("http://localhost:3000");
+		username = prompt("Enter username:", "");
+		console.log(username);
+		const socket = io("https://fluorescent-profuse-acorn.glitch.me");
+		// const socket = io("http://localhost:3000");
 
 		const videoGrid = document.getElementById('video-grid');
 		const superVid = document.getElementById('super-video');
@@ -58,17 +63,21 @@
 				video: true,
 				audio: true
 			}).then(stream => {
+				superVid.srcObject = stream;
+
+				videos.set('me', {videoSource: stream, muted: true, mirror: true, camera: camera});
+				videos = videos;
 				
-				// create video object, add to stream
-				const video = document.createElement("video");
-				video.muted = true;
 				superVid.srcObject = stream;
 				superVid.classList.add("-scale-x-100")
-				addStream(video, stream, true);
-
 
 				function toggleCam() {
 					stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
+					camera = stream.getVideoTracks()[0].enabled;
+					let temp = videos.get('me');
+					temp.camera = camera;
+					videos.set('me', temp);
+					videos = videos;
 				}
 
 				function toggleMute() {
@@ -81,228 +90,191 @@
 				// call
 				peer.on('call', call => {
 					// answer
-					console.log(call);
-				
-					const video = document.createElement("video");
 					let streamType = call.metadata.type;
 					if (streamType == "video") {
-						peers[call.peer] = call;
-						videos[call.peer] = video;
+						peers.set(call.peer, call);
 						call.answer(stream)
 					} else {
-						shareCallsIn[call.peer] = call;
-						sharesIn[call.peer] = video;
+						shareCallsIn.set(call.peer, call);
 						call.answer();
 					}
 
-					call.on('close', () => {
-						video.remove()
+					call.on('stream', userVideoStream => {
+						// add incoming stream to grid
 						if (streamType == "video") {
-							if (peers[call.peer]) {
-								peers[call.peer].close()
-								peers[call.peer] = null;
-							}
+							addStream(call.peer, userVideoStream);
 						} else {
-							if (shareCallsIn[call.peer]) {
-								shareCallsIn[call.peer].close()
-								shareCallsIn[call.peer] = null;
-							}
+							addShare(call.peer, userVideoStream);
 						}
+						console.log(call.peer + " stream");
+					})
 
-
-						console.log('close from other end')
+					call.on('close', () => {
+						if (streamType == "video") {
+							endPeerCall(call.peer);
+							removeStream(call.peer);
+						} else {
+							endShareCallIn(call.peer);
+							removeShare(call.peer);
+						}
+						console.log(call.peer + " close");
 					})
 
 					call.on('stream', userVideoStream => {
 						// add incoming stream to grid
-						addStream(video, userVideoStream);
-						console.log('peer joined ' + call.peer + ' ' + call.metadata.type);
+						if (streamType == "video") {
+							addStream(call.peer, userVideoStream);
+						} else {
+							addShare(call.peer, userVideoStream);
+						}
 					})
 				
 				})
 				
 				// user connects, transmit call to them
 				socket.on('user-connected', userId => {
-					console.log(userId + " peer");
 					newUserCall(userId, stream);
 				})
 				
 				// on disconnect, close call
 				socket.on('user-disconnected', userId => {
-					console.log("can");
-					console.log(peers[userId])
-					if (peers[userId]) {
-						peers[userId].close()
-						peers[userId] = null;
-					}
-					if (shareCallsOut[userId]) {
-						shareCallsOut[userId].close()
-						shareCallsOut[userId] = nul;
-					}
-
-					if (shareCallsIn[userId]) {
-						shareCallsIn[userId].close()
-						shareCallsIn[userId] = null;
-					}
-
-					if (videos[userId]) {
-						videos[userId].remove();
-						videos[userId] = null;
-					}
-					if (sharesIn[userId]) {
-						sharesIn[userId].remove();
-						sharesIn[userId] = null;
-					}
-
+					endPeerCall(userId);
+					endShareCallIn(userId);
+					endShareCallOut(userId);
+					removeStream(userId);
+					removeShare(userId);
 				})
 
 				socket.on('user-ended-screenshare', userId => {
-					if (sharesIn[userId]) {
-						sharesIn[userId].remove();
-						sharesIn[userId] = null;
-					}
-
-					if (shareCallsIn[userId]) {
-						shareCallsIn[userId].close()
-						shareCallsIn[userId] = null;
-					}
+					removeShare(userId);
+					endShareCallIn(userId);
 				})
 			})
 
 			// screenshare
 			function screenShare () {
 				// get user screen
-				
 				if (screenshare) {
 					screenshare = false;
-					screenshareTracks[0].stop();
-					screenshareTracks[0].dispatchEvent(new Event("ended"));
-					screenshareTracks[1].stop();
+					screenshareTracks.stop();
+					screenshareTracks.dispatchEvent(new Event("ended"));
 				} else {
-
 					navigator.mediaDevices.getDisplayMedia({
 						video: true,
 						audio: true
 					}).then(stream => {
 						screenshare = true;
-						screenshareTracks = [stream.getVideoTracks()[0], stream.getAudioTracks()[0]];
-						console.log('testing')
+						screenshareTracks = stream.getVideoTracks()[0];
+
+						stream.getVideoTracks()[0].addEventListener('ended', () => {
+							console.log('ended');
+							let tracks = stream.getTracks();
+							removeShare('me');
+							for (var i = 0; i < tracks.length; i++) {
+								tracks[i].stop();
+							}
+							for (let [key, val] of shareCallsOut) {
+								endShareCallOut(key);
+							}
+							socket.emit('stop-screenshare', roomName, myId);
+							screenshare = false;
+						});
+
 						socket.emit('request-participants', roomName);
-							// get user screen, add to grid
-							const video = document.createElement("video");
-							video.muted = true;
-							myShare = video;
-							addStream(video, stream);
-							
-							socket.on('user-connected', userId => {
-								if (screenshare) {
-									console.log(userId + " peer share");
-									newUserScreenshare(userId, stream);
+						socket.on('participants', users => {
+
+							for (var key in users) {
+								let user = users[key];
+								console.log(user);
+								console.log(shareCallsOut.has(user));
+								if (user != myId && !shareCallsOut.has(user)) {
+									newUserScreenshare(user, stream);
 								}
-
-							})
-
-							socket.on('participants', users => {
-								console.log(users);
-								if (screenshare) {
-									for (var key in users) {
-										let user = users[key];
-										if (user != myId && shareCallsOut[user] == null) {
-											console.log(user);
-											newUserScreenshare(user, stream);
-										}
-									}
-								}
-
-							})
-
-							stream.getVideoTracks()[0].onended = function () {
-
-								socket.emit('stop-screenshare', roomName, myId);
-								screenshare = false;
-								video.remove();
-
-								for (var key in shareCallsOut) {
-									shareCallsOut[key].close();
-									shareCallsOut[key] = null;
-								}
-							};
+							}
 						})
+						addShare("me", stream);
+						
+						socket.on('user-connected', userId => {
+							newUserScreenshare(userId, stream);
+						})
+
+
+					})
 				}
-
-
 			}
 			
 			document.getElementById('share').onclick = screenShare;
 
 
 			// add stream to video grid
-			function addStream (video, stream, mine=false) {
+			function addStream (userId, stream) {
+				videos.set(userId, {videoSource: stream, camera: true, muted: false, mirror: false});
+				videos = videos;
+			}
 
-				video.srcObject = stream
-				video.classList.add("flex");
-				video.classList.add("border-2");
-				video.classList.add("w-full");
-				video.classList.add("mx-auto");
+			function removeStream (userId) {
+				videos.delete(userId);
+				videos = videos;
+			}
 
-				if (mine) {
-					video.classList.add("-scale-x-100");
-				}
+			// add share to video grid
+			function addShare (userId, stream) {
+				sharesIn.set(userId, {videoSource: stream, camera: true, muted: false, mirror: false});
+				sharesIn = sharesIn;
+			}
 
-
-				video.onclick = function() {
-
-					superVid.srcObject = stream;
-	
-					if (mine) {
-						superVid.classList.add("-scale-x-100");
-					} else {
-						superVid.classList.remove("-scale-x-100");
-					}
-				}
-				video.addEventListener('loadedmetadata', () => {
-					video.play()
-				})
-				videoGrid.append(video);
+			function removeShare (userId) {
+				sharesIn.delete(userId);
+				sharesIn = sharesIn;
 			}
 
 			function newUserCall (userId, stream) {
 				let options = {metadata: {"type": "video"}};
 				const call = peer.call(userId, stream, options);
-				const video = document.createElement("video");
 
-				peers[userId] = call;
-				videos[userId] = video;
+				peers.set(userId, call);
 
 				call.on('stream', userStream => {
-					addStream(video, userStream);
+					addStream(userId, userStream);
 				})
 				
 				// remove video on close
 				call.on('close', () => {
-					video.remove()
-					videos[userId] = null;
-					console.log('close from your end')
+					removeStream(userId);
+					endPeerCall(userId);
 				})
-				
-				// set call
+			}
 
+			function endPeerCall (userId) {
+				if (peers.has(userId)) {
+					peers.get(userId).close();
+					peers.delete(userId);
+				}
+			}
+
+			function endShareCallIn (userId) {
+				if (shareCallsIn.has(userId)) {
+					shareCallsIn.get(userId).close();
+					shareCallsIn.delete(userId);
+				}
+			}
+
+			function endShareCallOut (userId) {
+				if (shareCallsOut.has(userId)) {
+					shareCallsOut.get(userId).close();
+					shareCallsOut.delete(userId);
+				}
 			}
 
 			function newUserScreenshare (userId, stream) {
 				let options = {metadata: {"type": "screenshare"}};
 				const call = peer.call(userId, stream, options);
-
-				
+				// set call
+				shareCallsOut.set(userId, call);
 				// remove video on close
 				call.on('close', () => {
-					shareCallsOut[userId].close();
-					shareCallsOut[userId] = null;
-					console.log('share close from your end')
+					endShareCallOut(userId);
 				})
-				
-				// set call
-				shareCallsOut[userId] = call;
 			}
 
 		})
@@ -323,12 +295,19 @@
 		<div class="grid grid-cols-5 h-2/3">
 			<div class = "flex flex-col">
 				<div id="video-grid" class="basis-0 grow overflow-y-auto">
-					<!-- Your content goes here -->
+					{#each [...videos] as [key,value]}
+						{#key value.camera}
+							<svelte:component this={Box} bind:boxSettings={value}/>
+						{/key}
+					{/each}
+					{#each [...sharesIn] as [key,value]}
+						<svelte:component this={Box} bind:boxSettings={value}/>
+					{/each}
 				</div>
 			</div>
 			
 			<div id="super-grid" class="col-span-4 h-full">
-				<video autoplay id="super-video" class=" w-full h-full"></video>
+				<video autoplay id="super-video" class="top-0 w-full h-full"></video>
 			</div>
 		</div>
 
@@ -340,9 +319,11 @@
 
 	<div class="flex flex-box fixed bottom-0 w-full bg-blue-950 py-5 align-items justify-center">
 		
-		<button id="camToggle" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Toggle Camera</button>
-		<button id="toggleMute" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">{muted ? "Unmute" : "Mute"}</button>
-		<button id="share" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">{screenshare ? "Stop Screenshare" : "Screenshare"}</button>
+		<button id="camToggle" class={camera ? "bg-blue-500 hover:bg-blue-700 text-white font-bold h-16 w-16 m-2 rounded-full" : "bg-red-500 hover:bg-red-700 text-white font-bold h-16 w-16 m-2 rounded-full"}><i class={camera ? "fa-solid fa-xl fa-video" : "fa-solid fa-xl fa-video-slash"}></i>
+		</button>
+		<button id="toggleMute" class={muted ? "bg-red-500 hover:bg-redasdfsf-700 text-white font-bold h-16 w-16 m-2 rounded-full" : "bg-blue-500 hover:bg-blue-700 text-white font-bold h-16 w-16 m-2 rounded-full"}><i class={muted ? "fa-solid fa-xl fa-microphone-slash" : "fa-solid fa-xl fa-microphone"}></i>
+		</button>
+		<button id="share" class={screenshare ? "bg-red-500 hover:bg-redasdfsf-700 text-white font-bold h-16 w-16 m-2 rounded-full" : "bg-blue-500 hover:bg-blue-700 text-white font-bold h-16 w-16 m-2 rounded-full"}><i class="fa-solid fa-xl fa-desktop"></i></button>
 
 	</div>
 

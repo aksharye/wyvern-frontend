@@ -14,7 +14,11 @@ const config = {
 		adapter: adapter({
 
 		})
-	}
+	},
+
+	compilerOptions: {
+		accessors: true
+	},
 };
 
 export default config;
