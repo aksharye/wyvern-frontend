@@ -56,7 +56,7 @@
 
 		
 		import("peerjs").then(({ default: Peer }) => {
-			const peer = new Peer();
+			const peer = new Peer({host:'https://fluorescent-profuse-acorn.glitch.me', secure:true, port:3000});
 
 			peer.on('open', id => {
 				// emit join room upon open
@@ -69,31 +69,6 @@
 				video: true,
 				audio: true
 			}).then(stream => {
-
-
-				videos.set('me', {id: 'me', username: username, videoSource: stream, myMute: muted, muted: true, mirror: true, camera: camera, mine: true});
-				videos = videos;
-
-				superGrid = videos.get('me')
-
-				function toggleCam() {
-					stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
-					camera = stream.getVideoTracks()[0].enabled;
-					cameraChange('me', camera);
-					socket.emit('camera-change-client', roomName, myId, camera);
-					superGrid = superGrid;
-				}
-
-				function toggleMute() {
-					stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
-					muted = !stream.getAudioTracks()[0].enabled;
-					muteChange('me', muted);
-					socket.emit('mute-change-client', roomName, myId, muted);
-					superGrid = superGrid;
-				}
-
-				document.getElementById('camToggle').onclick = toggleCam;				
-				document.getElementById('toggleMute').onclick = toggleMute;
 				// call
 				peer.on('call', call => {
 					// answer
@@ -106,7 +81,7 @@
 						peerUsername = call.metadata.username;
 						peerCamera = call.metadata.camera;
 						peerMuted = call.metadata.muted;
-						console.log("Incoming call from " + call.metadata.peer + " " + call.metadata.username)
+						console.log("Incoming call from " + call.peer + " " + call.metadata.username)
 						call.answer(stream)
 					} else {
 						shareCallsIn.set(call.peer, call);
@@ -133,6 +108,31 @@
 					})
 				
 				})
+
+				videos.set('me', {id: 'me', username: username, videoSource: stream, myMute: muted, muted: true, mirror: true, camera: camera, mine: true});
+				videos = videos;
+
+				superGrid = videos.get('me')
+
+				function toggleCam() {
+					stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
+					camera = stream.getVideoTracks()[0].enabled;
+					cameraChange('me', camera);
+					socket.emit('camera-change-client', roomName, myId, camera);
+					superGrid = superGrid;
+				}
+
+				function toggleMute() {
+					stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
+					muted = !stream.getAudioTracks()[0].enabled;
+					muteChange('me', muted);
+					socket.emit('mute-change-client', roomName, myId, muted);
+					superGrid = superGrid;
+				}
+
+				document.getElementById('camToggle').onclick = toggleCam;				
+				document.getElementById('toggleMute').onclick = toggleMute;
+
 				
 				// user connects, transmit call to them
 				socket.on('user-connected', (userId, peerUsername, peerCamera, peerMuted) => {
