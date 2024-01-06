@@ -61,7 +61,6 @@
 			peer.on('open', id => {
 				// emit join room upon open
 				myId = id;
-				socket.emit('join-room', roomName, id, username, camera, muted)
 			})
 			
 			// get user camera
@@ -70,6 +69,8 @@
 				audio: true
 			}).then(stream => {
 				// call
+				socket.emit('join-room', roomName, id, username, camera, muted)
+
 				peer.on('call', call => {
 					// answer
 					let streamType = call.metadata.type;
