@@ -56,7 +56,7 @@
 
 		
 		import("peerjs").then(({ default: Peer }) => {
-			const peer = new Peer({host:'https://abalone-sticky-plywood.glitch.me', port:3000});
+			const peer = new Peer({host:'https://abalone-sticky-plywood.glitch.me', path='/'});
 
 			peer.on('open', id => {
 				// emit join room upon open
