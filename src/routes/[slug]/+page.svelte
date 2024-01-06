@@ -69,7 +69,7 @@
 				audio: true
 			}).then(stream => {
 				// call
-				socket.emit('join-room', roomName, myId, username, camera, muted)
+
 
 				peer.on('call', call => {
 					// answer
@@ -107,6 +107,8 @@
 							removeShare(call.peer);
 						}
 					})
+
+					socket.emit('join-room', roomName, myId, username, camera, muted)
 				
 				})
 
