@@ -52,15 +52,15 @@
 			console.log("Successfully connected to socket");
 		});
 
-		var myId = "";
+		var myId = v4();
 
 		
 		import("peerjs").then(({ default: Peer }) => {
-			const peer = new Peer();
+			const peer = new Peer(myId);
 
 			peer.on('open', id => {
 				// emit join room upon open
-				myId = id;
+	
 			})
 			
 			// get user camera
