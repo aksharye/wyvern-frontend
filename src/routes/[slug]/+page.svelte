@@ -59,7 +59,7 @@
 			const peer = new Peer({host:'https://abalone-sticky-plywood.glitch.me',
 								secure:true,
 								port:3000,
-								path: '/peerjs'});
+								path: '/'});
 
 			peer.on('open', id => {
 				// emit join room upon open
