@@ -56,7 +56,7 @@
 
 		
 		import("peerjs").then(({ default: Peer }) => {
-			const peer = new Peer({host:'https://abalone-sticky-plywood.glitch.me',
+			const peer = new Peer({host:'abalone-sticky-plywood.glitch.me',
 								secure:true,
 								port:3000,
 								path: '/'});
