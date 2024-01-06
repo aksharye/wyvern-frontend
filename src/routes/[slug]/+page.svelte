@@ -61,9 +61,7 @@
 			peer.on('open', id => {
 				// emit join room upon open
 				myId = id;
-				console.log(username);
 				socket.emit('join-room', roomName, id, username, camera, muted)
-				console.log("user joined " + id);
 			})
 			
 			// get user camera
@@ -77,7 +75,6 @@
 				videos = videos;
 
 				superGrid = videos.get('me')
-				console.log(superGrid);
 
 				function toggleCam() {
 					stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
@@ -109,6 +106,7 @@
 						peerUsername = call.metadata.username;
 						peerCamera = call.metadata.camera;
 						peerMuted = call.metadata.muted;
+						console.log("Incoming call from " + call.metadata.peer + " " + call.metadata.username)
 						call.answer(stream)
 					} else {
 						shareCallsIn.set(call.peer, call);
@@ -122,7 +120,6 @@
 						} else {
 							addShare(call.peer, userVideoStream);
 						}
-						console.log(call.peer + " stream");
 					})
 
 					call.on('close', () => {
@@ -133,7 +130,6 @@
 							endShareCallIn(call.peer);
 							removeShare(call.peer);
 						}
-						console.log(call.peer + " close");
 					})
 				
 				})
@@ -187,7 +183,6 @@
 						screenshareTracks = stream.getVideoTracks()[0];
 						screenshareStream = stream;
 						stream.getVideoTracks()[0].addEventListener('ended', () => {
-							console.log('ended');
 							let tracks = stream.getTracks();
 							removeShare('me');
 							for (var i = 0; i < tracks.length; i++) {
@@ -211,8 +206,6 @@
 				if (screenshare) {
 					for (var key in users) {
 						let user = users[key];
-						console.log(user);
-						console.log(shareCallsOut.has(user));
 						if (user != myId && !shareCallsOut.has(user)) {
 							newUserScreenshare(user, screenshareStream);
 						}
@@ -263,6 +256,7 @@
 			function newUserCall (userId, stream, peerUsername, peerCamera, peerMuted) {
 				let options = {metadata: {"type": "video", "username": username, "camera": camera, "muted": muted}};
 				const call = peer.call(userId, stream, options);
+				console.log("Outgoing call to " + userId + " " + peerUsername);
 
 				peers.set(userId, call);
 
@@ -316,7 +310,6 @@
 	});
 
 	function featureScreen(userId) {
-		console.log(userId);
 		superGrid = videos.get(userId);
 		superGrid = superGrid;
 	}
