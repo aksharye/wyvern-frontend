@@ -25,21 +25,27 @@
 	var screenshare = false;
 	var screenshareTracks = null;
 	var myShare = null;
-	var username = "";
-
+	var username = "User-" + Math.floor(Math.random()*(999-100+1)+100);
+	let screenshareStream = null;
+	let superGrid = {};
 	let boxes = [];
 
 	onMount(() => {
+		let userPrompt = prompt("Enter username", username);
+		if (userPrompt) username = userPrompt;
 
-		username = prompt("Enter username:", "");
-		console.log(username);
-		const socket = io("https://fluorescent-profuse-acorn.glitch.me");
-		// const socket = io("http://localhost:3000");
+		navigator.getUserMedia =
+			navigator.getUserMedia ||
+			navigator.webkitGetUserMedia ||
+			navigator.mozGetUserMedia;
+
+		// const socket = io("https://fluorescent-profuse-acorn.glitch.me");
+		const socket = io("http://localhost:3000");
 
 		const videoGrid = document.getElementById('video-grid');
 		const superVid = document.getElementById('super-video');
 		
-		superVid.muted = true;
+
 	
 
 		socket.on("connect", () => {
@@ -47,6 +53,7 @@
 		});
 
 		var myId = "";
+
 		
 		import("peerjs").then(({ default: Peer }) => {
 			const peer = new Peer();
@@ -54,7 +61,8 @@
 			peer.on('open', id => {
 				// emit join room upon open
 				myId = id;
-				socket.emit('join-room', roomName, id)
+				console.log(username);
+				socket.emit('join-room', roomName, id, username, camera, muted)
 				console.log("user joined " + id);
 			})
 			
@@ -63,26 +71,28 @@
 				video: true,
 				audio: true
 			}).then(stream => {
-				superVid.srcObject = stream;
 
-				videos.set('me', {videoSource: stream, muted: true, mirror: true, camera: camera});
+
+				videos.set('me', {id: 'me', username: username, videoSource: stream, myMute: muted, muted: true, mirror: true, camera: camera, mine: true});
 				videos = videos;
-				
-				superVid.srcObject = stream;
-				superVid.classList.add("-scale-x-100")
+
+				superGrid = videos.get('me')
+				console.log(superGrid);
 
 				function toggleCam() {
 					stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
 					camera = stream.getVideoTracks()[0].enabled;
-					let temp = videos.get('me');
-					temp.camera = camera;
-					videos.set('me', temp);
-					videos = videos;
+					cameraChange('me', camera);
+					socket.emit('camera-change-client', roomName, myId, camera);
+					superGrid = superGrid;
 				}
 
 				function toggleMute() {
 					stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
 					muted = !stream.getAudioTracks()[0].enabled;
+					muteChange('me', muted);
+					socket.emit('mute-change-client', roomName, myId, muted);
+					superGrid = superGrid;
 				}
 
 				document.getElementById('camToggle').onclick = toggleCam;				
@@ -91,8 +101,14 @@
 				peer.on('call', call => {
 					// answer
 					let streamType = call.metadata.type;
+					let peerUsername = "";
+					let peerCamera = true;
+					let peerMuted = false;
 					if (streamType == "video") {
 						peers.set(call.peer, call);
+						peerUsername = call.metadata.username;
+						peerCamera = call.metadata.camera;
+						peerMuted = call.metadata.muted;
 						call.answer(stream)
 					} else {
 						shareCallsIn.set(call.peer, call);
@@ -102,7 +118,7 @@
 					call.on('stream', userVideoStream => {
 						// add incoming stream to grid
 						if (streamType == "video") {
-							addStream(call.peer, userVideoStream);
+							addStream(call.peer, userVideoStream, peerUsername, peerCamera, peerMuted);
 						} else {
 							addShare(call.peer, userVideoStream);
 						}
@@ -119,21 +135,15 @@
 						}
 						console.log(call.peer + " close");
 					})
-
-					call.on('stream', userVideoStream => {
-						// add incoming stream to grid
-						if (streamType == "video") {
-							addStream(call.peer, userVideoStream);
-						} else {
-							addShare(call.peer, userVideoStream);
-						}
-					})
 				
 				})
 				
 				// user connects, transmit call to them
-				socket.on('user-connected', userId => {
-					newUserCall(userId, stream);
+				socket.on('user-connected', (userId, peerUsername, peerCamera, peerMuted) => {
+					newUserCall(userId, stream, peerUsername, peerCamera, peerMuted);
+					if (screenshare) {
+						newUserScreenshare(userId, screenshareStream);
+					}
 				})
 				
 				// on disconnect, close call
@@ -145,6 +155,14 @@
 					removeShare(userId);
 				})
 
+				socket.on('camera-change', (userId, camState) => {
+					cameraChange(userId, camState);
+				});
+
+				socket.on('mute-change', (userId, muteState) => {
+					muteChange(userId, muteState);
+				});
+
 				socket.on('user-ended-screenshare', userId => {
 					removeShare(userId);
 					endShareCallIn(userId);
@@ -153,9 +171,11 @@
 
 			// screenshare
 			function screenShare () {
+
 				// get user screen
 				if (screenshare) {
 					screenshare = false;
+					screenshareStream = null;
 					screenshareTracks.stop();
 					screenshareTracks.dispatchEvent(new Event("ended"));
 				} else {
@@ -165,7 +185,7 @@
 					}).then(stream => {
 						screenshare = true;
 						screenshareTracks = stream.getVideoTracks()[0];
-
+						screenshareStream = stream;
 						stream.getVideoTracks()[0].addEventListener('ended', () => {
 							console.log('ended');
 							let tracks = stream.getTracks();
@@ -181,34 +201,46 @@
 						});
 
 						socket.emit('request-participants', roomName);
-						socket.on('participants', users => {
 
-							for (var key in users) {
-								let user = users[key];
-								console.log(user);
-								console.log(shareCallsOut.has(user));
-								if (user != myId && !shareCallsOut.has(user)) {
-									newUserScreenshare(user, stream);
-								}
-							}
-						})
 						addShare("me", stream);
-						
-						socket.on('user-connected', userId => {
-							newUserScreenshare(userId, stream);
-						})
-
-
 					})
 				}
 			}
-			
+
+			socket.on('participants', users => {
+				if (screenshare) {
+					for (var key in users) {
+						let user = users[key];
+						console.log(user);
+						console.log(shareCallsOut.has(user));
+						if (user != myId && !shareCallsOut.has(user)) {
+							newUserScreenshare(user, screenshareStream);
+						}
+					}
+				}
+			})
+
+
 			document.getElementById('share').onclick = screenShare;
 
 
 			// add stream to video grid
-			function addStream (userId, stream) {
-				videos.set(userId, {videoSource: stream, camera: true, muted: false, mirror: false});
+			function cameraChange (userId, camState) {
+				let temp = videos.get(userId);
+				temp.camera = camState;
+				videos.set(userId, temp);
+				videos = videos;
+			}
+
+			function muteChange (userId, muteState) {
+				let temp = videos.get(userId);
+				temp.myMute = muteState;
+				videos.set(userId, temp);
+				videos = videos;
+			}
+
+			function addStream (userId, stream, peerUsername, peerCamera, peerMuted) {
+				videos.set(userId, {id: userId, videoSource: stream, camera: peerCamera, muted: false, mirror: false, username: peerUsername, myMute: peerMuted});
 				videos = videos;
 			}
 
@@ -219,7 +251,7 @@
 
 			// add share to video grid
 			function addShare (userId, stream) {
-				sharesIn.set(userId, {videoSource: stream, camera: true, muted: false, mirror: false});
+				sharesIn.set(userId, {id: userId, videoSource: stream, camera: true, muted: false, mirror: false});
 				sharesIn = sharesIn;
 			}
 
@@ -228,14 +260,14 @@
 				sharesIn = sharesIn;
 			}
 
-			function newUserCall (userId, stream) {
-				let options = {metadata: {"type": "video"}};
+			function newUserCall (userId, stream, peerUsername, peerCamera, peerMuted) {
+				let options = {metadata: {"type": "video", "username": username, "camera": camera, "muted": muted}};
 				const call = peer.call(userId, stream, options);
 
 				peers.set(userId, call);
 
 				call.on('stream', userStream => {
-					addStream(userId, userStream);
+					addStream(userId, userStream, peerUsername, peerCamera, peerMuted);
 				})
 				
 				// remove video on close
@@ -277,10 +309,22 @@
 				})
 			}
 
+
+
 		})
 
 	});
 
+	function featureScreen(userId) {
+		console.log(userId);
+		superGrid = videos.get(userId);
+		superGrid = superGrid;
+	}
+
+	function featureShare(userId) {
+		superGrid = sharesIn.get(userId);
+		superGrid = superGrid;
+	}
 </script>
 
 <svelte:head>
@@ -296,18 +340,26 @@
 			<div class = "flex flex-col">
 				<div id="video-grid" class="basis-0 grow overflow-y-auto">
 					{#each [...videos] as [key,value]}
-						{#key value.camera}
-							<svelte:component this={Box} bind:boxSettings={value}/>
+						{#key value.id}
+							<div class="h-1/4" on:click={featureScreen(value.id)}>
+								<svelte:component  this={Box} videoSource={value.videoSource} camera={value.camera} myMute = {value.myMute} muted={value.muted} mirror={value.mirror} username = {value.username} mine = {value.mine} />
+							</div>
 						{/key}
 					{/each}
 					{#each [...sharesIn] as [key,value]}
-						<svelte:component this={Box} bind:boxSettings={value}/>
+						{#key value.id}
+							<div class="h-1/4" on:click={featureShare(value.id)}>
+								<svelte:component this={Box} videoSource={value.videoSource} camera={value.camera} myMute = {value.myMute} muted={value.muted} mirror={value.mirror} username = {value.username} mine = {value.mine} />
+							</div>
+						{/key}
 					{/each}
 				</div>
 			</div>
 			
-			<div id="super-grid" class="col-span-4 h-full">
-				<video autoplay id="super-video" class="top-0 w-full h-full"></video>
+			<div id="super-grid" class="col-span-4 h-full w-full">
+				{#key superGrid.id}
+					<svelte:component this={Box} videoSource={superGrid.videoSource} camera={superGrid.camera} myMute = {superGrid.myMute} muted={superGrid.muted} mirror={superGrid.mirror} username = {superGrid.username} mine = {superGrid.mine} />
+				{/key}
 			</div>
 		</div>
 
