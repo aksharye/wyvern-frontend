@@ -108,10 +108,10 @@
 						}
 					})
 
-					socket.emit('join-room', roomName, myId, username, camera, muted)
 				
 				})
 
+				socket.emit('join-room', roomName, myId, username, camera, muted)
 				videos.set('me', {id: 'me', username: username, videoSource: stream, myMute: muted, muted: true, mirror: true, camera: camera, mine: true});
 				videos = videos;
 
