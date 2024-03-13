@@ -31,8 +31,8 @@
 	let boxes = [];
 
 	onMount(() => {
-		let userPrompt = prompt("Enter username", username);
-		if (userPrompt) username = userPrompt;
+		// let userPrompt = prompt("Enter username", username);
+		// if (userPrompt) username = userPrompt;
 
 		navigator.getUserMedia =
 			navigator.getUserMedia ||
@@ -328,23 +328,37 @@
 	<meta name="description" content="Svelte demo app" />
 </svelte:head>
 
-<main class="flex bg-gray-900 w-full h-screen align-items justify-center">
+<main class="">
 
+	<div>
+		<div id="video-grid" class="basis-0 grow overflow-y-auto">
+			{#each [...videos] as [key,value]}
+				{#key value.id}
+						<svelte:component  this={Box} videoSource={value.videoSource} camera={value.camera} myMute = {value.myMute} muted={value.muted} mirror={value.mirror} username = {value.username} mine = {value.mine} />
+				{/key}
+			{/each}
+			{#each [...sharesIn] as [key,value]}
+				{#key value.id}
+						<svelte:component this={Box} videoSource={value.videoSource} camera={value.camera} myMute = {value.myMute} muted={value.muted} mirror={value.mirror} username = {value.username} mine = {value.mine} />
+				{/key}
+			{/each}
+		</div>
+	</div>
 	
-	<div class="flex-auto max-h-screen w-3/4 pb-5">
-		<div class="grid grid-cols-5 h-2/3">
-			<div class = "flex flex-col">
+	<!-- <div class="">
+		<div class="grid grid-cols-5">
+			<div class = "">
 				<div id="video-grid" class="basis-0 grow overflow-y-auto">
 					{#each [...videos] as [key,value]}
 						{#key value.id}
-							<div class="h-1/4" on:click={featureScreen(value.id)}>
+							<div class="h-1/4 border-2" on:click={featureScreen(value.id)}>
 								<svelte:component  this={Box} videoSource={value.videoSource} camera={value.camera} myMute = {value.myMute} muted={value.muted} mirror={value.mirror} username = {value.username} mine = {value.mine} />
 							</div>
 						{/key}
 					{/each}
 					{#each [...sharesIn] as [key,value]}
 						{#key value.id}
-							<div class="h-1/4" on:click={featureShare(value.id)}>
+							<div class="h-1/4 border-2" on:click={featureShare(value.id)}>
 								<svelte:component this={Box} videoSource={value.videoSource} camera={value.camera} myMute = {value.myMute} muted={value.muted} mirror={value.mirror} username = {value.username} mine = {value.mine} />
 							</div>
 						{/key}
@@ -352,7 +366,7 @@
 				</div>
 			</div>
 			
-			<div id="super-grid" class="col-span-4 h-full w-full">
+			<div id="super-grid" class="col-span-4 h-3/4 w-full border-2">
 				{#key superGrid.id}
 					<svelte:component this={Box} videoSource={superGrid.videoSource} camera={superGrid.camera} myMute = {superGrid.myMute} muted={superGrid.muted} mirror={superGrid.mirror} username = {superGrid.username} mine = {superGrid.mine} />
 				{/key}
@@ -363,7 +377,7 @@
 
 		<div class="flipVid"></div>
 
-	</div>
+	</div> -->
 
 	<div class="flex flex-box fixed bottom-0 w-full bg-blue-950 py-5 align-items justify-center">
 		

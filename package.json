@@ -49,6 +49,8 @@
 		"peerjs": "^1.5.2",
 		"socket.io-client": "^4.7.2",
 		"svelte-awesome": "^3.3.0",
+		"svelte-drag-and-drop-actions": "^1.0.1",
+		"svelte-drag-drop-touch": "^0.1.9",
 		"uuid": "^9.0.1"
 	}
 }
